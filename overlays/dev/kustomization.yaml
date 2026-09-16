@@ -43,7 +43,7 @@ patches:
 images:
   - name: uptimecrew/taxcalc-api
     newName: uptimecrew/taxcalc-api
-    newTag: "broken-tag-for-notification-test"
+    newTag: 1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f
 
 # Per-env replica count — dev runs lean at one replica.
 replicas:
