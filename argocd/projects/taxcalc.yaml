@@ -35,14 +35,18 @@ spec:
 
   # Cluster-scoped resources: the app team has NO business creating
   # ClusterRoles, CustomResourceDefinitions, or PersistentVolumes.
-  # Empty whitelist = full deny. Platform team manages those.
-  clusterResourceWhitelist: []
+  # Allow Namespace so CreateNamespace=true sync option and
+  # base/00-namespace.yaml can both work. All other cluster-scoped
+  # kinds are implicitly denied.
+  clusterResourceWhitelist:
+    - {group: "", kind: Namespace}
 
   # Namespace-scoped resources: only the kinds the W5 D3 manifests
   # actually use. Anything else is denied -- a compromised config
   # repo cannot smuggle in a privileged DaemonSet.
+  # NOTE: Namespace is cluster-scoped, so it belongs only in
+  # clusterResourceWhitelist above, NOT here.
   namespaceResourceWhitelist:
-    - {group: "",                       kind: Namespace}
     - {group: "",                       kind: Service}
     - {group: "",                       kind: ConfigMap}
     - {group: "",                       kind: Secret}
