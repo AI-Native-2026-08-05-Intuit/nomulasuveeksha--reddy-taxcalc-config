@@ -60,8 +60,8 @@ spec:
         # Deployment) live in the Kustomize overlay.
         argocd.argoproj.io/sync-wave: "{{wave}}"
         # Subscribe each generated Application to bad-outcome notifications.
-        notifications.argoproj.io/subscribe.on-sync-failed.slack: argocd-notifications
-        notifications.argoproj.io/subscribe.on-health-degraded.slack: argocd-notifications
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: taxcalc-deploys
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: taxcalc-deploys
       labels:
         env:  "{{env}}"
         team: taxcalc

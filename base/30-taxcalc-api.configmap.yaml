@@ -26,6 +26,10 @@ data:
   MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
   MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
   MANAGEMENT_HEALTH_DISKSPACE_ENABLED: "false"
+  # No database is deployed in the local k3d environment. Spring Boot
+  # otherwise rejects readiness.health.group because it includes the
+  # disabled `db` health contributor.
+  MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP: "false"
   # No live Postgres in k3d: pin the Hibernate dialect and skip schema
   # validation so entityManagerFactory can be built without a JDBC round-trip
   SPRING_JPA_HIBERNATE_DDL_AUTO: none

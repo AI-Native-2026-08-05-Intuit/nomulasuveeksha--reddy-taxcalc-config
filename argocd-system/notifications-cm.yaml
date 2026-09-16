@@ -1,5 +1,5 @@
 # argocd-system/notifications-cm.yaml
-# Wires argocd-notifications-controller to Slack channel #argocd-notifications.
+# Wires argocd-notifications-controller to Slack channel #taxcalc-deploys.
 # The webhook URL is held in the argocd-notifications-secret (create out-of-band):
 #
 #   kubectl -n argocd create secret generic argocd-notifications-secret \
@@ -81,6 +81,6 @@ data:
   # bad-outcome triggers via this block. Per-Application annotations
   # (on the Application CRs) are the override mechanism.
   subscriptions: |
-    - recipients: [slack:argocd-notifications]
+    - recipients: [slack:taxcalc-deploys]
       triggers:   [on-sync-failed, on-health-degraded]
       selector:   "team=taxcalc"

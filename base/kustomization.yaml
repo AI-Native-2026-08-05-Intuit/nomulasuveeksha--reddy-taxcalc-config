@@ -10,5 +10,8 @@ resources:
   - 20-taxcalc-api.service.yaml
   - 30-taxcalc-api.configmap.yaml
   - 40-taxcalc-api.secret.yaml
-  - 50-taxcalc-api.hpa.yaml
+  # Argo CD v2.11.7 cannot parse Kubernetes v1.35's HPA
+  # .status.terminatingReplicas field during client-side comparison.
+  # The HPA is omitted until the Argo CD control plane is upgraded;
+  # this also keeps dev's explicit one-replica configuration authoritative.
   - 60-taxcalc-api.servicemonitor.yaml
