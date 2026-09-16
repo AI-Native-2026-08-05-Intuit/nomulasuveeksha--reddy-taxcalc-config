@@ -1,0 +1,96 @@
+# argocd/projects/taxcalc.yaml
+# AppProject scoping the taxcalc capstone team.
+# The platform team owns this file in practice; the app team
+# proposes changes via PR. Every Application in this assignment
+# has spec.project = taxcalc -- never "default".
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: taxcalc
+  namespace: argocd
+  # Finalizer ensures Argo CD prunes generated Applications when
+  # the project itself is deleted -- a defence against orphaned
+  # workloads if the project is ever retired.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: taxcalc-api capstone -- GitOps overlays + observability
+
+  # WHICH repos may an Application in this project use as source?
+  # Exact URL only — no globs, no wildcards. A wildcard sourceRepos is
+  # indistinguishable from leaving the project in default for security.
+  sourceRepos:
+    - https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha-reddy--taxcalc-config.git
+
+  # WHICH (cluster, namespace) pairs are legal?
+  # The k3d cluster is reachable via the in-cluster service DNS.
+  # Each env has its own namespace -- explicit, not globbed.
+  destinations:
+    - server:    https://kubernetes.default.svc
+      namespace: taxcalc-dev
+    - server:    https://kubernetes.default.svc
+      namespace: taxcalc-staging
+    - server:    https://kubernetes.default.svc
+      namespace: taxcalc-prod
+
+  # Cluster-scoped resources: the app team has NO business creating
+  # ClusterRoles, CustomResourceDefinitions, or PersistentVolumes.
+  # Empty whitelist = full deny. Platform team manages those.
+  clusterResourceWhitelist: []
+
+  # Namespace-scoped resources: only the kinds the W5 D3 manifests
+  # actually use. Anything else is denied -- a compromised config
+  # repo cannot smuggle in a privileged DaemonSet.
+  namespaceResourceWhitelist:
+    - {group: "",                       kind: Namespace}
+    - {group: "",                       kind: Service}
+    - {group: "",                       kind: ConfigMap}
+    - {group: "",                       kind: Secret}
+    - {group: "",                       kind: ServiceAccount}
+    - {group: apps,                     kind: Deployment}
+    - {group: autoscaling,              kind: HorizontalPodAutoscaler}
+    - {group: policy,                   kind: PodDisruptionBudget}
+    - {group: networking.k8s.io,        kind: NetworkPolicy}
+    - {group: monitoring.coreos.com,    kind: ServiceMonitor}
+    - {group: monitoring.coreos.com,    kind: PrometheusRule}
+
+  # Explicitly block quota knobs -- the platform team owns those.
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+
+  # Sync windows: deny auto-sync to prod over the weekend.
+  # Manual sync still works (manualSync: true on the allow side),
+  # but the controller will not promote on its own.
+  syncWindows:
+    - kind: deny
+      schedule: "0 17 * * 5"        # Friday 17:00
+      duration: 60h                 # through Monday 05:00
+      applications:
+        - "taxcalc-api-prod"
+      manualSync: true              # human can still force-sync on-call
+
+  # Project-scoped RBAC -- two roles, not "any-developer-is-admin".
+  roles:
+    # Developers: read + sync in dev/staging; cannot touch prod.
+    - name: developers
+      description: Read everything; sync dev and staging only.
+      policies:
+        - p, proj:taxcalc:developers, applications, get,    taxcalc/*,                    allow
+        - p, proj:taxcalc:developers, applications, sync,   taxcalc/taxcalc-api-dev,      allow
+        - p, proj:taxcalc:developers, applications, sync,   taxcalc/taxcalc-api-staging,  allow
+        - p, proj:taxcalc:developers, applications, delete, taxcalc/*,                    deny
+        - p, proj:taxcalc:developers, logs,         get,    taxcalc/*,                    allow
+      groups:
+        - uptimecrew:taxcalc-engineers
+    # Releasers: full sync including prod; still cannot override the
+    # project's allow-lists (those live above).
+    - name: releasers
+      description: Full sync including prod. Cannot delete Applications.
+      policies:
+        - p, proj:taxcalc:releasers, applications, get,       taxcalc/*, allow
+        - p, proj:taxcalc:releasers, applications, sync,      taxcalc/*, allow
+        - p, proj:taxcalc:releasers, applications, action/*, taxcalc/*, allow
+        - p, proj:taxcalc:releasers, applications, delete,    taxcalc/*, deny
+      groups:
+        - uptimecrew:taxcalc-engineers-releasers

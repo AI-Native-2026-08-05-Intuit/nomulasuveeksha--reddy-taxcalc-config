@@ -1,0 +1,51 @@
+# overlays/dev/kustomization.yaml
+# The dev overlay — the smallest viable patch over the W5 D3 base.
+# Same shape repeats at overlays/staging/ and overlays/prod/ with
+# different namespace + replica + image-tag patches.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base: the unchanged W5 D3 manifests, copied verbatim into the
+# config repo at base/. Kept identical across envs.
+resources:
+  - ../../base
+
+# Per-env namespace — Kustomize rewrites every resource's
+# metadata.namespace at build time.
+namespace: taxcalc-dev
+
+# Sync-wave annotations: Namespace lands in wave -1 (before
+# anything else); all other resources land in wave 0 (default).
+# The Namespace resource's wave -1 is set directly on the resource in
+# base/00-namespace.yaml via a strategic merge here.
+patches:
+  - target:
+      kind: Namespace
+      name: taxcalc-dev
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+  - target:
+      kind: ConfigMap
+      name: taxcalc-api-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_PROFILES_ACTIVE
+        value: dev
+      - op: replace
+        path: /data/LOGGING_LEVEL_ROOT
+        value: DEBUG
+
+# Image-tag rewrite — the CI _bump-config workflow rewrites the
+# digest portion only; Kustomize merges it onto the rendered
+# Deployment without touching the base manifest.
+images:
+  - name: uptimecrew/taxcalc-api
+    newName: uptimecrew/taxcalc-api
+    newTag: 1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f
+
+# Per-env replica count — dev runs lean at one replica.
+replicas:
+  - name: taxcalc-api
+    count: 1
