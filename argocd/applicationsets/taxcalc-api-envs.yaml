@@ -68,7 +68,7 @@ spec:
     spec:
       project: taxcalc
       source:
-        repoURL:        https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha-reddy--taxcalc-config.git
+        repoURL:        https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha--reddy-taxcalc-config.git
         path:           "{{overlay}}"
         targetRevision: main
       destination:

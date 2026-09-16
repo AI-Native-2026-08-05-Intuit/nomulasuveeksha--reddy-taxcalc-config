@@ -20,7 +20,7 @@ spec:
   # Exact URL only — no globs, no wildcards. A wildcard sourceRepos is
   # indistinguishable from leaving the project in default for security.
   sourceRepos:
-    - https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha-reddy--taxcalc-config.git
+    - https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha--reddy-taxcalc-config.git
 
   # WHICH (cluster, namespace) pairs are legal?
   # The k3d cluster is reachable via the in-cluster service DNS.
