@@ -1,0 +1,98 @@
+# argocd/applicationsets/taxcalc-api-envs.yaml
+# Templates one Application per env. The list generator drives
+# (env, overlay, namespace, wave) tuples; the inner clusters generator
+# scopes the fleet to registered clusters labelled tier=workload.
+# Adding a new env (e.g. canary) is a one-line entry in the elements list.
+#
+# To label the in-cluster k3d Secret for local development:
+#   kubectl -n argocd get secrets -l argocd.argoproj.io/secret-type=cluster
+#   kubectl -n argocd label secret <name> uptimecrew.example.internal/tier=workload
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: taxcalc-api-envs
+  namespace: argocd
+spec:
+  # If an env falls out of the matrix, KEEP the existing
+  # Application + workload running. A human re-reviews before any
+  # teardown. The default (delete) is the wrong default for prod.
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+
+  generators:
+    - matrix:
+        generators:
+          # Inner generator A: explicit env list.
+          - list:
+              elements:
+                - env: dev
+                  overlay: overlays/dev
+                  namespace: taxcalc-dev
+                  wave: "0"
+                - env: staging
+                  overlay: overlays/staging
+                  namespace: taxcalc-staging
+                  wave: "1"
+                - env: prod
+                  overlay: overlays/prod
+                  namespace: taxcalc-prod
+                  wave: "2"
+          # Inner generator B: every cluster tagged tier=workload.
+          # For the local k3d cluster, label the registered cluster
+          # Secret with this label at install time (see comment above).
+          - clusters:
+              selector:
+                matchLabels:
+                  uptimecrew.example.internal/tier: workload
+
+  template:
+    metadata:
+      # Application names MUST be unique; compose from the params.
+      name: taxcalc-api-{{env}}
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        # Sync-wave on the generated Application orders the
+        # cross-env promotion: dev syncs first, staging second,
+        # prod third. Within a single Application, sync-wave
+        # annotations on individual resources (Namespace before
+        # Deployment) live in the Kustomize overlay.
+        argocd.argoproj.io/sync-wave: "{{wave}}"
+        # Subscribe each generated Application to bad-outcome notifications.
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: taxcalc-deploys
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: taxcalc-deploys
+      labels:
+        env:  "{{env}}"
+        team: taxcalc
+    spec:
+      project: taxcalc
+      source:
+        repoURL:        https://github.com/AI-Native-2026-08-05-Intuit/nomulasuveeksha--reddy-taxcalc-config.git
+        path:           "{{overlay}}"
+        targetRevision: main
+      destination:
+        server:    "{{server}}"
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune:    true
+          selfHeal: true
+          # PROD-ONLY NOTE: this assignment leaves prod on the same
+          # automated stanza as dev/staging because a k3d cluster has
+          # no real users. In a real install, consider templatePatch on
+          # env: prod to drop automated and require manual sync.
+          # The trade-off is documented in taxcalc-api/GITOPS.md.
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration:    10s
+            factor:      2
+            maxDuration: 3m

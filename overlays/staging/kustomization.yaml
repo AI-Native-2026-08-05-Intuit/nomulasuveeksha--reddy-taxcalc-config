@@ -1,0 +1,43 @@
+# overlays/staging/kustomization.yaml
+# Staging overlay: 2 replicas, INFO logging, staging Spring profile.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: taxcalc-staging
+
+patches:
+  - target:
+      kind: Namespace
+      name: taxcalc-dev
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: taxcalc-staging
+      - op: replace
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+  - target:
+      kind: ConfigMap
+      name: taxcalc-api-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_PROFILES_ACTIVE
+        value: staging
+      - op: replace
+        path: /data/LOGGING_LEVEL_ROOT
+        value: INFO
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: jdbc:postgresql://postgres.taxcalc-staging.svc.cluster.local:5432/taxcalc_staging
+
+images:
+  - name: uptimecrew/taxcalc-api
+    newName: uptimecrew/taxcalc-api
+    newTag: 1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f
+
+replicas:
+  - name: taxcalc-api
+    count: 2

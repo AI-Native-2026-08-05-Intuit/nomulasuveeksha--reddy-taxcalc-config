@@ -1,0 +1,86 @@
+# argocd-system/notifications-cm.yaml
+# Wires argocd-notifications-controller to Slack channel #taxcalc-deploys.
+# The webhook URL is held in the argocd-notifications-secret (create out-of-band):
+#
+#   kubectl -n argocd create secret generic argocd-notifications-secret \
+#     --from-literal=slack-token=<WEBHOOK_URL>
+#
+# This ConfigMap declares only the triggers, templates, and the named service
+# that points at the secret. Engineers do NOT commit the secret to Git.
+#
+# Apply:
+#   kubectl apply -f argocd-system/notifications-cm.yaml -n argocd
+#   kubectl -n argocd rollout restart deploy/argocd-notifications-controller
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-notifications-cm
+  namespace: argocd
+data:
+  # ----- Where to deliver notifications -----
+  service.slack: |
+    token: $slack-token   # resolved from argocd-notifications-secret
+
+  # ----- Triggers (when to fire) -----
+  trigger.on-sync-failed: |
+    - description: Application sync failed.
+      send:    [app-sync-failed]
+      when:    app.status.operationState.phase in ['Error', 'Failed']
+
+  trigger.on-health-degraded: |
+    - description: Application health degraded.
+      send:    [app-health-degraded]
+      when:    app.status.health.status == 'Degraded'
+
+  # NOTE: on-sync-succeeded is DELIBERATELY omitted. Subscribing
+  # every Application to it produces a deploy-firehose that humans
+  # learn to mute — and once they mute it, they miss the failures too.
+  # The curriculum rule: alert on bad outcomes; rely on Git history +
+  # the Argo CD UI for "what deployed when."
+
+  # ----- Templates (how to render) -----
+  template.app-sync-failed: |
+    message: |
+      {{.app.metadata.name}} sync FAILED at {{.app.status.operationState.finishedAt}}.
+      Project:   {{.app.spec.project}}
+      Revision:  {{.app.status.operationState.syncResult.revision}}
+      Phase:     {{.app.status.operationState.phase}}
+      Message:   {{.app.status.operationState.message}}
+      View:      https://argocd.uptimecrew.example.internal/applications/{{.app.metadata.name}}
+    slack:
+      attachments: |
+        [{
+          "title":   "{{.app.metadata.name}} sync failed",
+          "color":   "#E96D76",
+          "fields":  [
+            {"title": "Project",  "value": "{{.app.spec.project}}",  "short": true},
+            {"title": "Revision", "value": "{{.app.status.operationState.syncResult.revision}}", "short": true}
+          ]
+        }]
+
+  template.app-health-degraded: |
+    message: |
+      {{.app.metadata.name}} health is DEGRADED.
+      Project:   {{.app.spec.project}}
+      Status:    {{.app.status.health.status}}
+      Message:   {{.app.status.health.message}}
+      View:      https://argocd.uptimecrew.example.internal/applications/{{.app.metadata.name}}
+    slack:
+      attachments: |
+        [{
+          "title":   "{{.app.metadata.name}} health degraded",
+          "color":   "#F2C744",
+          "fields":  [
+            {"title": "Status",   "value": "{{.app.status.health.status}}",  "short": true},
+            {"title": "Message",  "value": "{{.app.status.health.message}}", "short": false}
+          ]
+        }]
+
+  # ----- Default subscriptions (per-Application annotations override) -----
+  # Every Application labelled team=taxcalc is subscribed to the two
+  # bad-outcome triggers via this block. Per-Application annotations
+  # (on the Application CRs) are the override mechanism.
+  subscriptions: |
+    - recipients: [slack:taxcalc-deploys]
+      triggers:   [on-sync-failed, on-health-degraded]
+      selector:   "team=taxcalc"

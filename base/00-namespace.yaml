@@ -1,0 +1,19 @@
+# base/00-namespace.yaml
+# taxcalc-dev Namespace only.
+# ResourceQuota and LimitRange are INTENTIONALLY omitted here — those
+# are platform-team-owned and are blocked by the AppProject
+# namespaceResourceBlacklist. Overlays must not add them either.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taxcalc-dev
+  labels:
+    app.kubernetes.io/part-of: taxcalc
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    # Namespace lands in wave -1 so it exists before the Deployment
+    # and Service on a brand-new cluster. Kustomize commonAnnotations
+    # in each overlay sets wave 0 on everything else; this annotation
+    # must be set directly on the Namespace resource via a
+    # strategic-merge patch in the overlay (see overlays/*/kustomization.yaml).
+    argocd.argoproj.io/sync-wave: "-1"

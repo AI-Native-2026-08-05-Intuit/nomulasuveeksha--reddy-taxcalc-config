@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taxcalc-api-config
+  namespace: taxcalc-dev
+  labels:
+    app.kubernetes.io/name: taxcalc-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: taxcalc
+    app.kubernetes.io/managed-by: argocd
+data:
+  SPRING_PROFILES_ACTIVE: k8s
+  LOGGING_LEVEL_ROOT: INFO
+  SERVER_PORT: "8080"
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres.taxcalc-dev.svc.cluster.local:5432/taxcalc_dev
+  SPRING_DATASOURCE_USERNAME: taxcalc_dev
+  SPRING_DATA_REDIS_HOST: redis.taxcalc-dev.svc.cluster.local
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otelcol.taxcalc-dev.svc.cluster.local:4317
+  OTEL_SERVICE_NAME: taxcalc-api
+  MONGO_HOST: mongo.taxcalc-dev.svc.cluster.local
+  MONGO_USER: taxcalc
+  MANAGEMENT_HEALTH_DB_ENABLED: "false"
+  MANAGEMENT_HEALTH_MONGO_ENABLED: "false"
+  MANAGEMENT_HEALTH_REDIS_ENABLED: "false"
+  MANAGEMENT_HEALTH_KAFKA_ENABLED: "false"
+  MANAGEMENT_HEALTH_DISKSPACE_ENABLED: "false"
+  # No database is deployed in the local k3d environment. Spring Boot
+  # otherwise rejects readiness.health.group because it includes the
+  # disabled `db` health contributor.
+  MANAGEMENT_ENDPOINT_HEALTH_VALIDATE_GROUP_MEMBERSHIP: "false"
+  # No live Postgres in k3d: pin the Hibernate dialect and skip schema
+  # validation so entityManagerFactory can be built without a JDBC round-trip
+  SPRING_JPA_HIBERNATE_DDL_AUTO: none
+  SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+  SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: "-1"
+  SPRING_KAFKA_LISTENER_AUTO_STARTUP: "false"
+  # No live Mongo in k3d: disable auto-index-creation so bean init doesn't
+  # eagerly dial Mongo and time out
+  SPRING_DATA_MONGODB_AUTO_INDEX_CREATION: "false"
