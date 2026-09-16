@@ -1,0 +1,46 @@
+# overlays/prod/kustomization.yaml
+# Prod overlay: 3 replicas, WARN logging, prod Spring profile.
+# NOTE: the AppProject syncWindows deny block prevents Argo CD from
+# auto-syncing prod Friday 17:00 → Monday 05:00 UTC. A human
+# (releaser role) can still force-sync on-call via manualSync.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: taxcalc-prod
+
+patches:
+  - target:
+      kind: Namespace
+      name: taxcalc-dev
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: taxcalc-prod
+      - op: replace
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+  - target:
+      kind: ConfigMap
+      name: taxcalc-api-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_PROFILES_ACTIVE
+        value: prod
+      - op: replace
+        path: /data/LOGGING_LEVEL_ROOT
+        value: WARN
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: jdbc:postgresql://postgres.taxcalc-prod.svc.cluster.local:5432/taxcalc_prod
+
+images:
+  - name: uptimecrew/taxcalc-api
+    newName: uptimecrew/taxcalc-api
+    newTag: 1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f
+
+replicas:
+  - name: taxcalc-api
+    count: 3
