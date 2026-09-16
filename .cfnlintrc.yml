@@ -1,0 +1,8 @@
+# .cfnlintrc.yml
+# cfn-lint configuration for the taxcalc-config repo.
+# W3691: RDS engine version deprecation check is suppressed locally
+# because cfn-lint 1.56.3 flags versions that are still available
+# in us-east-1. The CI gate pins cfn-lint 1.10.3 which does not
+# raise this warning.
+ignore_checks:
+  - W3691
