@@ -41,7 +41,10 @@ Resources:
           - id: W77
             reason: "KmsKeyId not specified; aws/secretsmanager CMK is acceptable for dev. Customer-managed key for prod is a separate concern."
     Properties:
-      Name:        taxcalc/dev/db-master
+      # Path uses EnvName so staging/prod stacks read their own secret,
+      # not the dev one. All three references (Name, MasterUsername,
+      # MasterUserPassword) must use the same parameterised path.
+      Name:        !Sub "taxcalc/${EnvName}/db-master"
       Description: !Sub "taxcalc DB master credentials, ${EnvName}."
       GenerateSecretString:
         SecretStringTemplate: '{"username": "taxcalc_master"}'
@@ -125,11 +128,12 @@ Resources:
       MultiAZ:               false
       BackupRetentionPeriod: 7
       DeletionProtection:    true
-      # Dynamic resolution -- the curriculum-correct master-credential pattern.
-      # No Fn::Sub needed: {{resolve:...}} is a CFN native dynamic reference,
-      # not a Sub expression; the password never enters CFN API responses.
-      MasterUsername: "{{resolve:secretsmanager:taxcalc/dev/db-master:SecretString:username}}"
-      MasterUserPassword: "{{resolve:secretsmanager:taxcalc/dev/db-master:SecretString:password}}"
+      # Dynamic resolution via Fn::Sub + {{resolve:...}}: the Fn::Sub expands
+      # EnvName so the path matches the secret created above for this env.
+      # The password never enters CFN API responses -- it is resolved at
+      # deploy time by the CloudFormation service, not stored in stack state.
+      MasterUsername: !Sub "{{resolve:secretsmanager:taxcalc/${EnvName}/db-master:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:taxcalc/${EnvName}/db-master:SecretString:password}}"
       Tags:
         - {Key: Env,     Value: !Ref EnvName}
         - {Key: Project, Value: taxcalc}
