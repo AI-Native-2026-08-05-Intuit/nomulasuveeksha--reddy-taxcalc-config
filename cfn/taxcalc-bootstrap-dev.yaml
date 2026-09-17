@@ -137,12 +137,16 @@ Resources:
               StringEquals:
                 # StringEquals on aud: only sts.amazonaws.com is valid here.
                 "token.actions.githubusercontent.com:aud": sts.amazonaws.com
-              # StringLike on sub: branch + PR refs differ per workflow run;
-              # the org/repo prefix is exact but ref suffix varies.
+              # StringLike on sub: Intuit's GitHub Enterprise appends numeric
+              # entity IDs to org and repo names in the sub claim
+              # (e.g. "repo:org@123/repo@456:pull_request" instead of
+              # "repo:org/repo:pull_request"). The * after each name
+              # matches those suffixes while keeping the match scoped
+              # to this exact org and repo name prefix.
               StringLike:
                 "token.actions.githubusercontent.com:sub":
-                  - !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/main"
-                  - !Sub "repo:${GitHubOrg}/${GitHubRepo}:pull_request"
+                  - !Sub "repo:${GitHubOrg}*/${GitHubRepo}*:ref:refs/heads/main"
+                  - !Sub "repo:${GitHubOrg}*/${GitHubRepo}*:pull_request"
       Policies:
         - PolicyName: cfn-deploy-narrow
           PolicyDocument:
