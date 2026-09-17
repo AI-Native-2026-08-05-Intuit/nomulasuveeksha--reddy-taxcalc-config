@@ -124,6 +124,8 @@ Resources:
         rules_to_suppress:
           - id: W28
             reason: "Explicit RoleName required: the OIDC trust policy sub claim and GitHub Actions assume-role reference both pin to this exact name."
+          - id: W11
+            reason: "cloudformation:ValidateTemplate is a global API that does not accept a resource ARN; Resource:* is required and the action is read-only."
     Properties:
       RoleName: taxcalc-api-cfn-deploy
       AssumeRolePolicyDocument:
@@ -152,7 +154,7 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              # CFN itself: only THIS capstone's stacks.
+              # CFN stack + changeset operations: scoped to this capstone's stacks only.
               - Sid: CfnStackOps
                 Effect: Allow
                 Action:
@@ -164,13 +166,19 @@ Resources:
                   - cloudformation:DescribeStackEvents
                   - cloudformation:DescribeStackResources
                   - cloudformation:GetTemplate
-                  - cloudformation:ValidateTemplate
                   - cloudformation:DetectStackDrift
                   - cloudformation:DescribeStackDriftDetectionStatus
                   - cloudformation:DescribeStackResourceDrifts
                 Resource:
                   - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/taxcalc-*"
                   - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/taxcalc-*"
+              # ValidateTemplate is a global API - it does not target a specific
+              # stack ARN, so it must be permitted on Resource: "*".
+              - Sid: CfnValidateTemplate
+                Effect: Allow
+                Action:
+                  - cloudformation:ValidateTemplate
+                Resource: "*"
               # S3 read on the bootstrap bucket (for stored templates).
               - Sid: BootstrapBucketRead
                 Effect: Allow
