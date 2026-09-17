@@ -40,6 +40,14 @@ Parameters:
     Type: String
     Default: nomulasuveeksha--reddy-taxcalc-config
     Description: Repo (the W6 D2 gitops config repo).
+  ExistingBucketName:
+    Type: String
+    Default: uptimecrew-taxcalc-bootstrap-dev-276663280807
+    Description: >-
+      Name of the pre-existing S3 bucket to import into this stack.
+      The sandbox account SCP denies s3:CreateBucket via CLI/CFN, so
+      the bucket is created out-of-band from the console and imported
+      via --change-set-type IMPORT rather than created by this template.
 
 Resources:
   # --- The bootstrap bucket. Hardened from day 1: PAB on, default
@@ -56,9 +64,10 @@ Resources:
           - id: W35
             reason: "Access logging not required for the bootstrap bucket; adding it would create a circular logging dependency."
     Properties:
-      # Synthetic globally-unique name. AWS::AccountId disambiguates
-      # across cohorts running the same stack in different accounts.
-      BucketName: !Sub "uptimecrew-taxcalc-bootstrap-${EnvName}-${AWS::AccountId}"
+      # References the pre-existing bucket (created out-of-band from
+      # the console before the SCP deny took effect). Imported via
+      # --change-set-type IMPORT on the initial deploy.
+      BucketName: !Ref ExistingBucketName
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
