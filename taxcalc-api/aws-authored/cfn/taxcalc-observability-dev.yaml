@@ -1,0 +1,26 @@
+# taxcalc-api/aws-authored/cfn/taxcalc-observability-dev.yaml
+# TASK 4 (AUTHOR-AND-DEFEND -- X-Ray is AWS-native). ReservoirSize
+# floors the rate at 10 traces/sec so a slow window still captures
+# the first traces of an incident; FixedRate samples 5% above the
+# floor. NEVER FixedRate: 0 -- you lose visibility of error spikes
+# during quiet windows because the reservoir only captures up to 10
+# traces/sec and 0% of the remainder means zero traces above the
+# floor when traffic is low.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: taxcalc observability -- X-Ray sampling rule.
+Resources:
+  TaxcalcSamplingRule:
+    Type: AWS::XRay::SamplingRule
+    Properties:
+      SamplingRule:
+        RuleName: taxcalc-api-default
+        Priority: 1000
+        ReservoirSize: 10
+        FixedRate: 0.05
+        ServiceName: taxcalc-api
+        ServiceType: "*"
+        Host: "*"
+        HTTPMethod: "*"
+        URLPath: "*"
+        ResourceARN: "*"
+        Version: 1

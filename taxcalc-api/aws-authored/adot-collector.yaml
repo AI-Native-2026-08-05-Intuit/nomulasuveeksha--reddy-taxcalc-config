@@ -1,0 +1,36 @@
+# taxcalc-api/aws-authored/adot-collector.yaml
+# TASK 4 (AUTHOR-AND-DEFEND). One OTLP receiver, two exporters: the
+# Tempo half WOULD run on your k3d (W5 D5 Tempo endpoint); the
+# awsxray half needs AWS. Dual-export keeps the app OTel SDK
+# vendor-neutral -- switching sinks is a collector-config change,
+# never an app redeploy.
+#
+# Scope note: the LLM call goes to the Anthropic API over HTTPS, so
+# that model hop is an ordinary outbound span Tempo already captures.
+# X-Ray's value here is the AWS-side spans on the SQS/RDS path
+# (managed-service segments Tempo can't see), not the LLM call.
+# If your capstone touches no AWS-instrumented service, the awsxray
+# exporter adds no signal and should be dropped.
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata: {name: adot-collector, namespace: observability}
+spec:
+  image: public.ecr.aws/aws-observability/aws-otel-collector:latest
+  mode: deployment
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc: {endpoint: 0.0.0.0:4317}
+          http: {endpoint: 0.0.0.0:4318}
+    exporters:
+      otlphttp/tempo:                 # runs locally (W5 D5 Tempo)
+        endpoint: http://tempo.observability.svc.cluster.local:4318
+        tls: {insecure: true}
+      awsxray:                        # needs AWS
+        region: us-east-1
+    service:
+      pipelines:
+        traces:
+          receivers:  [otlp]
+          exporters:  [otlphttp/tempo, awsxray]

@@ -1,0 +1,34 @@
+# taxcalc-api/aws-authored/karpenter-nodepool.yaml
+# TASK 4 (AUTHOR-AND-DEFEND -- Karpenter is AWS-native; it cannot
+# run on k3d). Spot + On-Demand mix across three AZs; consolidation
+# repacks underutilised nodes; limits cap a runaway HPA's blast
+# radius; the Task 2 PDB (minAvailable: 2) protects the floor during
+# consolidation so voluntary disruptions never floor the service.
+#
+# Why limits matter: a runaway HPA or KEDA ScaledObject can request
+# arbitrarily many pods. Without fleet limits, a misconfigured
+# lagThreshold or a stuck consumer group can drive Karpenter to
+# provision unbounded EC2 capacity. The limits here (200 vCPU /
+# 400 Gi) cap the blast radius to a known cost ceiling.
+#
+# Why consolidateAfter: 600s is lockstepped with the HPA scaleDown
+# stabilizationWindowSeconds: 600 -- node consolidation only kicks in
+# after the HPA has had its full cool-down window to determine that
+# the reduced replica count is stable, preventing a node from being
+# drained while the HPA might still want to scale back up.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: taxcalc-mixed
+spec:
+  template:
+    spec:
+      requirements:
+        - {key: karpenter.sh/capacity-type, operator: In, values: ["spot", "on-demand"]}
+        - {key: node.kubernetes.io/instance-type, operator: In, values: ["m5.large","m5.xlarge","m6i.large"]}
+        - {key: topology.kubernetes.io/zone, operator: In, values: ["us-east-1a","us-east-1b","us-east-1c"]}
+      nodeClassRef: {name: default}
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 600s        # lockstep with the HPA scale-down window
+  limits: {cpu: "200", memory: 400Gi}

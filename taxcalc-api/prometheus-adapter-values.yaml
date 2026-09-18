@@ -1,0 +1,18 @@
+# taxcalc-api/prometheus-adapter-values.yaml
+# TASK 2: map the Micrometer gauge into the custom-metrics API so
+# the HPA can read it. prometheusUrl points at the W5 D5
+# kube-prometheus-stack Prometheus Service.
+prometheus:
+  url: http://kube-prometheus-stack-prometheus.monitoring.svc
+  port: 9090
+rules:
+  custom:
+    - seriesQuery: 'taxcalc_inflight_requests{namespace!="",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: namespace}
+          pod:       {resource: pod}
+      name:
+        matches: "taxcalc_inflight_requests"
+        as: "taxcalc_inflight_requests"
+      metricsQuery: 'avg_over_time(taxcalc_inflight_requests{<<.LabelMatchers>>}[1m])'
