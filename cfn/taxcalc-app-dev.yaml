@@ -1,0 +1,155 @@
+# cfn/taxcalc-app-dev.yaml
+# TASK 3 application stack: an RDS PostgreSQL instance + parameter
+# group + a Secrets Manager secret holding the master credentials.
+# Consumes the network stack's exports via !ImportValue. The DB
+# master password is NEVER passed as a Parameter (NoEcho or not --
+# see Section 9 sticking point); it lives in Secrets Manager and is
+# resolved at deploy time via the {{resolve:secretsmanager:...}}
+# dynamic reference. Stateful resources carry BOTH DeletionPolicy:
+# Retain AND UpdateReplacePolicy: Retain.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: taxcalc application stack -- RDS + Secrets Manager.
+
+Parameters:
+  EnvName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment.
+  NetworkStackName:
+    Type: String
+    Default: taxcalc-network-dev
+    Description: Name of the network stack whose exports we !ImportValue.
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.small
+    AllowedValues: [db.t4g.small, db.t4g.medium, db.m6g.large]
+    Description: RDS instance class; t4g.small is cost-appropriate for dev.
+
+Resources:
+  # --- Secrets Manager secret: the DB master credentials.
+  # GenerateSecretString is the curriculum-correct shape: CFN never
+  # sees the password value, only the secret's ARN. Anyone with
+  # cloudformation:DescribeStacks cannot read the password.
+  DbMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W77
+            reason: "KmsKeyId not specified; aws/secretsmanager CMK is acceptable for dev. Customer-managed key for prod is a separate concern."
+    Properties:
+      # Path uses EnvName so staging/prod stacks read their own secret,
+      # not the dev one. All three references (Name, MasterUsername,
+      # MasterUserPassword) must use the same parameterised path.
+      Name:        !Sub "taxcalc/${EnvName}/db-master"
+      Description: !Sub "taxcalc DB master credentials, ${EnvName}."
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "taxcalc_master"}'
+        GenerateStringKey:    password
+        ExcludeCharacters:    '"@/\'
+        PasswordLength:       32
+      Tags:
+        - {Key: Env,     Value: !Ref EnvName}
+        - {Key: Project, Value: taxcalc}
+
+  # --- DB subnet group spanning the private subnets imported from
+  # the network stack. !Split + !ImportValue is the cross-stack pattern.
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "taxcalc ${EnvName} private subnets"
+      SubnetIds:
+        !Split
+          - ","
+          - !ImportValue
+            "Fn::Sub": "${NetworkStackName}-PrivateSubnets"
+      Tags:
+        - {Key: Env,     Value: !Ref EnvName}
+        - {Key: Project, Value: taxcalc}
+
+  # --- DB security group: ingress 5432 only from the app SG.
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W5
+            reason: "Egress 443 to 0.0.0.0/0 is intentional for Secrets Manager rotation lambda."
+    Properties:
+      GroupDescription: !Sub "taxcalc ${EnvName} DB SG (5432 from app SG only)."
+      VpcId:
+        !ImportValue
+          "Fn::Sub": "${NetworkStackName}-VpcId"
+      SecurityGroupIngress:
+        - IpProtocol:             tcp
+          FromPort:               5432
+          ToPort:                 5432
+          SourceSecurityGroupId:
+            !ImportValue
+              "Fn::Sub": "${NetworkStackName}-AppSgId"
+          Description: Postgres from app SG only.
+      # Explicit egress required by cfn-nag F1000; 443 needed for
+      # Secrets Manager rotation lambda to call back to AWS APIs.
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort:   443
+          ToPort:     443
+          CidrIp:     0.0.0.0/0
+          Description: HTTPS to AWS APIs for Secrets Manager rotation.
+      Tags:
+        - {Key: Name, Value: !Sub "taxcalc-${EnvName}-db-sg"}
+
+  # --- The RDS instance itself. Stateful: Retain on BOTH policies.
+  # MasterUsername + MasterUserPassword come from Secrets Manager
+  # via dynamic reference; the password never appears in CFN state.
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "Explicit DBInstanceIdentifier required for operational tasks and cross-env uniqueness."
+    Properties:
+      DBInstanceIdentifier:  !Sub "taxcalc-${EnvName}"
+      Engine:                postgres
+      EngineVersion:         "16.4"
+      DBInstanceClass:       !Ref DbInstanceClass
+      AllocatedStorage:      "20"
+      StorageType:           gp3
+      StorageEncrypted:      true
+      DBSubnetGroupName:     !Ref DbSubnetGroup
+      VPCSecurityGroups:     [!Ref DbSecurityGroup]
+      PubliclyAccessible:    false
+      MultiAZ:               false
+      BackupRetentionPeriod: 7
+      DeletionProtection:    true
+      # Dynamic resolution via Fn::Sub + {{resolve:...}}: the Fn::Sub expands
+      # EnvName so the path matches the secret created above for this env.
+      # The password never enters CFN API responses -- it is resolved at
+      # deploy time by the CloudFormation service, not stored in stack state.
+      MasterUsername: !Sub "{{resolve:secretsmanager:taxcalc/${EnvName}/db-master:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:taxcalc/${EnvName}/db-master:SecretString:password}}"
+      Tags:
+        - {Key: Env,     Value: !Ref EnvName}
+        - {Key: Project, Value: taxcalc}
+
+  # --- Secret-to-DB attachment: rotation can target the live DB ARN.
+  SecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId:   !Ref DbMasterSecret
+      TargetId:   !Ref DbInstance
+      TargetType: AWS::RDS::DBInstance
+
+Outputs:
+  DbEndpoint:
+    Value: !GetAtt DbInstance.Endpoint.Address
+    Export: {Name: !Sub "${AWS::StackName}-DbEndpoint"}
+  DbSecretArn:
+    Value: !Ref DbMasterSecret
+    Export: {Name: !Sub "${AWS::StackName}-DbSecretArn"}

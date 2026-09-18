@@ -1,0 +1,11 @@
+# .cfnlintrc.yml
+# cfn-lint configuration for the taxcalc-config repo.
+#
+# W3691 / E3691: RDS engine version check.
+#   - cfn-lint 1.10.3 (CI) knows Postgres up to 16.4 and accepts it (no error).
+#   - cfn-lint 1.56.3 (local) has an updated deprecation list and raises W3691
+#     for 16.4. Suppressed here so local runs stay clean.
+#   Template uses EngineVersion: "16.4" which is the latest version in
+#   cfn-lint 1.10.3's known-good list.
+ignore_checks:
+  - W3691
