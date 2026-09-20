@@ -45,7 +45,9 @@ images:
     newName: uptimecrew/taxcalc-api
     newTag: 1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f
 
-# Per-env replica count — dev runs lean at one replica.
-replicas:
-  - name: taxcalc-api
-    count: 1
+# Per-env replica count — removed for taxcalc-api since hpa.yaml sets
+# minReplicas: 2; letting both fight over replicas causes a sync war.
+# The HPA is the authoritative replica controller for taxcalc-api.
+# replicas:
+#   - name: taxcalc-api
+#     count: 1
