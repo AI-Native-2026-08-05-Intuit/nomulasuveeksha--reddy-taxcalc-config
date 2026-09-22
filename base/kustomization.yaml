@@ -15,3 +15,9 @@ resources:
   # The HPA is omitted until the Argo CD control plane is upgraded;
   # this also keeps dev's explicit one-replica configuration authoritative.
   - 60-taxcalc-api.servicemonitor.yaml
+  # W6 D5: worker Deployment (KEDA scale target), KEDA ScaledObject,
+  # SLO-derived HPA, and PodDisruptionBudget.
+  - taxcalc-worker.deployment.yaml
+  - taxcalc-worker-scaledobject.yaml
+  - hpa.yaml
+  - pdb.yaml

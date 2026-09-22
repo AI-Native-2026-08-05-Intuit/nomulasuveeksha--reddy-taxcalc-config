@@ -1,0 +1,29 @@
+# taxcalc-api/taxcalc-worker.deployment.yaml
+# TASK 1: the KEDA scale target. Same image as taxcalc-api, run in
+# the `worker` profile: consumes taxpayers.events, re-projects the
+# Mongo read model, serves no HTTP. Starts at 0 replicas -- KEDA
+# owns the count from here (do NOT set replicas in the manifest
+# AND run a scaler; that is a sync war -- see the HPA note below).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxcalc-api-worker
+  namespace: taxcalc-dev
+  labels: {app: taxcalc-api-worker}
+spec:
+  replicas: 0
+  selector:
+    matchLabels: {app: taxcalc-api-worker}
+  template:
+    metadata:
+      labels: {app: taxcalc-api-worker}
+    spec:
+      containers:
+        - name: worker
+          image: uptimecrew/taxcalc-api:0.1.0    # same image as the api
+          env:
+            - {name: SPRING_PROFILES_ACTIVE, value: worker}
+            - {name: SPRING_KAFKA_BOOTSTRAP_SERVERS, value: kafka.taxcalc-dev.svc.cluster.local:9092}
+          resources:
+            requests: {cpu: "250m", memory: 512Mi}
+            limits:   {cpu: "1",    memory: 1Gi}

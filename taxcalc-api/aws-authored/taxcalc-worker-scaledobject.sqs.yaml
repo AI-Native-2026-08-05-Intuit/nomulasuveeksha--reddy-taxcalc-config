@@ -1,0 +1,43 @@
+# taxcalc-api/aws-authored/taxcalc-worker-scaledobject.sqs.yaml
+# TASK 4 (AUTHOR-AND-DEFEND -- do NOT apply to k3d): the production
+# form of Task 1's trigger. On a managed cluster the worker scales
+# on SQS depth, and the SQS GetQueueAttributes permission lives on
+# the KEDA OPERATOR's IRSA role via identityOwner: operator -- never
+# on the workload pod. This is where the credential-placement
+# discipline the plaintext dev Kafka trigger doesn't need is taught.
+#
+# Credential discipline: identityOwner: operator means the
+# GetQueueAttributes call is signed by the KEDA operator's service
+# account (which carries an IRSA annotation bound to the SQS read
+# policy). The workload pod has no AWS credentials at all. This
+# follows least-privilege: the workload never needs to call SQS
+# directly -- only KEDA reads queue depth to drive the HPA.
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: taxcalc-aws-auth
+  namespace: taxcalc-dev
+spec:
+  podIdentity:
+    provider: aws
+    identityOwner: operator      # operator's IRSA role, not the pod's
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: taxcalc-worker-scaledobject-sqs
+  namespace: taxcalc-dev
+spec:
+  scaleTargetRef: {name: taxcalc-api-worker}
+  minReplicaCount: 0
+  maxReplicaCount: 20
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: https://sqs.us-east-1.amazonaws.com/${AWS_ACCOUNT_ID}/taxcalc-calc-jobs-dev
+        queueLength: "10"
+        awsRegion: us-east-1
+        identityOwner: operator
+      authenticationRef:
+        name: taxcalc-aws-auth
